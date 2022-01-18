@@ -1,0 +1,51 @@
+name: Scan Container Images
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-scan:
+    runs-on: ubuntu-latest
+    env:
+      ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-west-2.amazonaws.com
+      ECR_REPO: tryan
+      IMAGE_TAG: ${{ github.sha }}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Docker build & tag image
+      run: docker build -t $ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG .
+
+    - name: Scan Container Image
+      uses: CrowdStrike/container-image-scan-action@v0.5
+      with:
+        container_repository: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPO }}
+        container_tag: ${{ env.IMAGE_TAG }}
+        crowdstrike_region: us-1
+        retry_count: 30
+      env:
+        FALCON_CLIENT_SECRET: ${{ secrets.FALCON_CLIENT_SECRET }}
+        FALCON_CLIENT_ID: ${{ secrets.FALCON_CLIENT_ID }}
+        JSON_REPORT: /tmp/report.json
+
+    - name: Print Container Scan Report
+      if: always()
+      run: |
+        jq '.' /tmp/report.json
+
+    # Below is example on pushing clean images to ECR
+    # - name: Configure AWS credentials
+    #   uses: aws-actions/configure-aws-credentials@v1
+    #   with:
+    #     aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+    #     aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+    #     aws-region: us-west-2
+
+    # - name: Login to ECR
+    #   uses: aws-actions/amazon-ecr-login@v1
+
+    # - name: Push to ECR
+    #   run: docker push $ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG
+
